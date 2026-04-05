@@ -12,9 +12,9 @@ URL_RE = re.compile(r"\((https?://[^)]+)\)")
 class MarkdownStore:
     def __init__(self, file_path: Path):
         self.file_path = file_path
-        self.file_path.parent.mkdir(parents=True, exist_ok=True)
-        if not self.file_path.exists():
-            self.file_path.write_text("", encoding="utf-8")
+        # self.file_path.parent.mkdir(parents=True, exist_ok=True)
+        # if not self.file_path.exists():
+        #     self.file_path.write_text("", encoding="utf-8")
 
     def _read_text(self) -> str:
         return self.file_path.read_text(encoding="utf-8")

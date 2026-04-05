@@ -15,15 +15,29 @@ class GitSync:
                 f"https://{cfg.git_token}@"
             )
 
-        if not repo_path.exists() or not (repo_path / ".git").exists():
-            logger.info("Cloning repository...")
+        if not repo_path.exists():
+            logger.info("Cloning repository into new directory...")
             self.repo = Repo.clone_from(
                 auth_url,
                 repo_path,
                 branch=cfg.git_branch,
             )
-        else:
+        elif (repo_path / ".git").exists():
+            logger.info("Using existing repository...")
             self.repo = Repo(repo_path)
+        else:
+            entries = list(repo_path.iterdir())
+            if entries:
+                raise RuntimeError(
+                    f"Directory '{repo_path}' exists, is not a git repository, "
+                    f"and is not empty"
+                )
+            logger.info("Cloning repository into existing empty directory...")
+            self.repo = Repo.clone_from(
+                auth_url,
+                repo_path,
+                branch=cfg.git_branch,
+            )
 
         with self.repo.config_writer() as cw:
             cw.set_value("user", "name", "habr-bot")

@@ -8,7 +8,10 @@ from src.config import logger
 from src.app import AppState
 from src.habr import Article
 
-
+# todo: enable commits
+#  do not flush messages
+#  say that's all for today when the article is marked
+#  make slash commands as a keyboard
 class TgApp:
     def __init__(self, state: AppState):
         self._state = state
