@@ -1,11 +1,17 @@
+from dataclasses import dataclass
 from typing import Iterable
 from urllib.parse import urljoin, urlparse
 
 import requests
 from bs4 import BeautifulSoup
 
-from storage import Article
-from utils import normalize_url
+from src.utils import normalize_url
+
+
+@dataclass
+class Article:
+    title: str
+    url: str
 
 
 class HabrSource:
@@ -18,11 +24,11 @@ class HabrSource:
         response.raise_for_status()
         soup = BeautifulSoup(response.text, "html.parser")
 
-        anchors = soup.select("a.tm-title__link, a.tm-article-snippet__title-link, h2 a, h1 a")
+        anchors = soup.select("a.tm-title__link")
         articles: list[Article] = []
         for a in anchors:
             href = (a.get("href") or "").strip()
-            title = a.get_text(separator=" ", strip=True) # todo
+            title = a.get_text(" ", strip=True)
             if not href or not title:
                 continue
             full_url = urljoin(response.url, href)

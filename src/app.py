@@ -1,7 +1,8 @@
-from config import Config
-from habr import HabrSource
-from storage import MarkdownStore, GitSync, Article
-from utils import normalize_url
+from src.config import Config
+from src.habr import HabrSource
+from src.sync import GitSync
+from src.store import MarkdownStore, Article
+from src.utils import normalize_url
 
 
 class AppState:
@@ -13,9 +14,9 @@ class AppState:
 
     def sync_habr(self) -> int:
         articles = self.source.fetch_articles()
-        existing = {normalize_url(u) for u in self.store.existing_urls()}
+        existing = self.store.existing_urls()
         new_articles = [a for a in articles if normalize_url(a.url) not in existing]
-        added = self.store.prepend_articles(new_articles)
+        added = self.store.add_new_articles(new_articles)
         if added:
             self.git_sync.sync(reason=f"sync {added}")
         return added

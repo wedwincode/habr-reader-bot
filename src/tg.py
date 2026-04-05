@@ -4,9 +4,9 @@ from datetime import datetime
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
 from telegram.ext import ContextTypes, Application, CommandHandler, CallbackQueryHandler
 
-from config import logger
+from src.config import logger
 from src.app import AppState
-from storage import Article
+from src.habr import Article
 
 
 class TgApp:
@@ -26,7 +26,7 @@ class TgApp:
     def _build_app(self):
         self._app = (Application.builder()
                      .token(self._state.cfg.telegram_token)
-                     .post_init(post_init)
+                     .post_init(schedule)
                      .build())
         self._app.bot_data["state"] = self._state
 
@@ -138,7 +138,7 @@ async def sync_job(context: ContextTypes.DEFAULT_TYPE) -> None:
         logger.exception("background sync failed")
 
 
-async def post_init(app: Application) -> None:
+async def schedule(app: Application) -> None:
     state: AppState = app.bot_data["state"]
     await asyncio.to_thread(state.sync_habr)
     app.job_queue.run_daily(

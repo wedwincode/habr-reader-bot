@@ -2,7 +2,12 @@ import logging
 import os
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Optional
+
+from dotenv import load_dotenv
+
+
+load_dotenv()
+
 
 logging.basicConfig(
     level=os.getenv("LOG_LEVEL", "INFO"),
@@ -17,11 +22,13 @@ class Config:
     telegram_chat_id: int
     markdown_file: Path
     habr_source_url: str
+    git_repo_url: str
     reminder_hour: int = 20
     reminder_minute: int = 0
     timezone_name: str = "Europe/Berlin"
     sync_interval_minutes: int = 30
-    git_repo_path: Optional[Path] = None
+    git_token: str | None = None
+    git_repo_path: Path | None = None
     git_auto_commit: bool = False
     git_branch: str = "main"
     git_remote: str = "origin"
@@ -33,6 +40,8 @@ class Config:
         telegram_chat_id = int(required_env("TELEGRAM_CHAT_ID"))
         markdown_file = Path(required_env("MARKDOWN_FILE")).expanduser().resolve()
         habr_source_url = required_env("HABR_SOURCE_URL")
+        git_repo_url = required_env("GIT_REPO_URL")
+        git_token = required_env("GIT_TOKEN")
         git_repo_raw = os.getenv("GIT_REPO_PATH", "").strip()
         git_repo_path = Path(git_repo_raw).expanduser().resolve() if git_repo_raw else None
         return cls(
@@ -44,6 +53,8 @@ class Config:
             reminder_minute=int(os.getenv("REMINDER_MINUTE", "0")),
             timezone_name=os.getenv("TZ", "Europe/Moscow"),
             sync_interval_minutes=int(os.getenv("SYNC_INTERVAL_MINUTES", "30")),
+            git_repo_url=git_repo_url,
+            git_token=git_token,
             git_repo_path=git_repo_path,
             git_auto_commit=os.getenv("GIT_AUTO_COMMIT", "false").lower() == "true",
             git_branch=os.getenv("GIT_BRANCH", "main"),
