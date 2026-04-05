@@ -1,0 +1,11 @@
+[project]
+name = "habr-reader-bot"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.12"
+dependencies = [
+    "beautifulsoup4>=4.14.3",
+    "gitpython>=3.1.46",
+    "python-telegram-bot>=22.7",
+    "requests>=2.33.1",
+]

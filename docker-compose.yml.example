@@ -1,0 +1,9 @@
+services:
+  habr-reader-bot:
+    build: .
+    container_name: habr-reader-bot
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - /opt/my-notes-repo:/data/notes
