@@ -56,7 +56,7 @@ class GitSync:
                 auth_url
             )
 
-    def sync(self, reason: str) -> None:
+    def pull(self) -> None:
         if not self.cfg.git_auto_commit or not self.cfg.git_repo_path:
             return
         origin = self.repo.remote(self.cfg.git_remote)
@@ -65,6 +65,10 @@ class GitSync:
             origin.pull(self.cfg.git_branch, rebase=True)
         except Exception as e:
             logger.exception(f"Git pull failed {e}")
+            return
+
+    def sync(self, reason: str) -> None:
+        if not self.cfg.git_auto_commit or not self.cfg.git_repo_path:
             return
 
         self.repo.git.add(self.cfg.markdown_file.as_posix())

@@ -1,17 +1,14 @@
 import asyncio
 from datetime import datetime
 
-from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update
+from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update, ReplyKeyboardMarkup, KeyboardButton
 from telegram.ext import ContextTypes, Application, CommandHandler, CallbackQueryHandler
 
 from src.config import logger
 from src.app import AppState
 from src.habr import Article
 
-# todo: enable commits
-#  do not flush messages
-#  say that's all for today when the article is marked
-#  make slash commands as a keyboard
+
 class TgApp:
     def __init__(self, state: AppState):
         self._state = state
@@ -45,43 +42,57 @@ def build_article_message(article: Article) -> str:
     return f"Прочитай статью\n\n{article.title}\n{article.url}"
 
 
-def build_article_keyboard(article: Article) -> InlineKeyboardMarkup:
+def build_article_inline_keyboard(article: Article) -> InlineKeyboardMarkup:
     return InlineKeyboardMarkup(
         [[InlineKeyboardButton("Я прочитал", callback_data=f"read|{article.url}")]]
     )
 
+def build_main_keyboard() -> ReplyKeyboardMarkup:
+    return ReplyKeyboardMarkup([
+            [KeyboardButton("/next"), KeyboardButton("/sync")],
+        ],
+        resize_keyboard=True,
+        is_persistent=True
+    )
 
 async def cmd_start(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
     await update.effective_message.reply_text(
         "Команды:\n"
         "/next - показать следующую непрочитанную статью\n"
         "/sync - подтянуть свежие закладки из Habr\n"
-        "/done <url> - отметить статью прочитанной"
+        "/done <url> - отметить статью прочитанной",
+        reply_markup=build_main_keyboard()
     )
 
 
 async def cmd_next(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     state: AppState = context.application.bot_data["state"]
+
+    status_message = await update.effective_message.reply_text("Получаю следующую статью...")
+
     article = state.get_next_article()
     if not article:
-        await update.effective_message.reply_text("Непрочитанных статей не осталось")
+        await status_message.edit_text("Непрочитанных статей не осталось")
         return
-    await update.effective_message.reply_text(
+    await status_message.edit_text(
         build_article_message(article),
-        reply_markup=build_article_keyboard(article),
+        reply_markup=build_article_inline_keyboard(article),
         disable_web_page_preview=False,
     )
 
 
 async def cmd_sync(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     state: AppState = context.application.bot_data["state"]
+
+    status_message = await update.effective_message.reply_text("Синхронизируюсь...")
+
     try:
-        added = await asyncio.to_thread(state.sync_habr)
+        added = await state.sync_habr_safe()
     except Exception as exc:
         logger.exception("sync failed")
-        await update.effective_message.reply_text(f"Ошибка синхронизации: {exc}")
+        await status_message.edit_text(f"Ошибка синхронизации: {exc}")
         return
-    await update.effective_message.reply_text(f"Синхронизация завершена, добавлено: {added}")
+    await status_message.edit_text(f"Синхронизация завершена, добавлено: {added}")
 
 
 async def cmd_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
@@ -98,35 +109,39 @@ async def cmd_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
 
 async def on_read_clicked(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
-    query = update.callback_query
-    await query.answer()
     state: AppState = context.application.bot_data["state"]
+
+    query = update.callback_query
+    await query.edit_message_reply_markup(reply_markup=None)
+    await query.answer()
+
+    status_message = await update.effective_message.reply_text("Отмечаю статью как прочитанную...")
+
     _, url = (query.data or "|").split("|", 1)
     changed = await asyncio.to_thread(state.mark_article_as_read, url)
     if not changed:
-        await query.edit_message_text("Не удалось отметить статью: запись не найдена в markdown")
+        await status_message.edit_text("Не удалось отметить статью: запись не найдена в markdown")
         return
     next_article = state.get_next_article()
     if next_article:
-        await query.edit_message_text(
-            "Отметил как прочитанное. Следующая статья:\n\n"
-            f"{next_article.title}\n{next_article.url}",
-            reply_markup=build_article_keyboard(next_article),
-            disable_web_page_preview=False,
+        await status_message.edit_text("Готово. Статья отмечена как прочитанная.")
+        await context.bot.send_message(
+            chat_id=state.cfg.telegram_chat_id,
+            text="Если хочешь получить еще одну статью, отправь /next",
         )
     else:
-        await query.edit_message_text("Готово. Непрочитанных статей больше нет")
+        await status_message.edit_text("Готово. Непрочитанных статей больше нет")
 
 
 async def reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     state: AppState = context.application.bot_data["state"]
-    article = await asyncio.to_thread(state.get_next_article)
+    article = await asyncio.to_thread(state.get_next_article)  # todo lock
     if not article:
         return
     await context.bot.send_message(
         chat_id=state.cfg.telegram_chat_id,
         text=build_article_message(article),
-        reply_markup=build_article_keyboard(article),
+        reply_markup=build_article_inline_keyboard(article),
         disable_web_page_preview=False,
     )
 
@@ -134,16 +149,16 @@ async def reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None:
 async def sync_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     state: AppState = context.application.bot_data["state"]
     try:
-        added = await asyncio.to_thread(state.sync_habr)
+        added = await state.sync_habr_safe()
         if added:
             logger.info("sync job added %s article(s)", added)
-    except Exception:
-        logger.exception("background sync failed")
+    except Exception as e:
+        logger.exception(f"background sync failed: {e}")
 
 
 async def schedule(app: Application) -> None:
     state: AppState = app.bot_data["state"]
-    await asyncio.to_thread(state.sync_habr)
+    await state.sync_habr_safe()
     app.job_queue.run_daily(
         reminder_job,
         time=datetime.now().astimezone().replace(
