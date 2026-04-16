@@ -51,7 +51,8 @@ def build_main_keyboard() -> ReplyKeyboardMarkup:
     return ReplyKeyboardMarkup([
             [KeyboardButton("/next"), KeyboardButton("/sync")],
         ],
-        resize_keyboard=True
+        resize_keyboard=True,
+        is_persistent=False
     )
 
 async def cmd_start(update: Update, _: ContextTypes.DEFAULT_TYPE) -> None:
