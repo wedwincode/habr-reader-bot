@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Iterable
 
 from src.habr import Article
-from src.utils import normalize_url, escape_title
+from src.utils import normalize_url, escape_title, extract_habr_article_id
 
 TASK_RE = re.compile(r"^(?P<indent>\s*)- \[(?P<done>[ xX])]\s+\[(?P<title>.+?)]\((?P<url>https?://[^)]+)\)\s*$")
 URL_RE = re.compile(r"\((https?://[^)]+)\)")
@@ -42,14 +42,16 @@ class MarkdownStore:
                 return Article(title=match.group("title"), url=match.group("url"))
         return None
 
-    def mark_read_by_url(self, url: str) -> bool:
+    def mark_read_by_habr_id(self, article_id: str) -> bool:
         lines = self._read_text().splitlines()
         changed = False
         for i, line in enumerate(lines):
             match = TASK_RE.match(line)
             if not match:
                 continue
-            if normalize_url(match.group("url")) == normalize_url(url):
+
+            current_id = extract_habr_article_id(match.group("url"))
+            if current_id == article_id:
                 lines[i] = f"{match.group('indent')}- [x]  [{match.group('title')}]({match.group('url')})"
                 changed = True
                 break

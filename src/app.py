@@ -33,9 +33,9 @@ class AppState:
         self.git_sync.pull()
         return self.store.first_unread()
 
-    def mark_article_as_read(self, url: str) -> bool:
+    def mark_article_as_read(self, habr_id: str) -> bool:
         self.git_sync.pull()
-        changed = self.store.mark_read_by_url(url)
+        changed = self.store.mark_read_by_habr_id(habr_id)
         if changed:
             self.git_sync.sync(reason="mark-read")
         return changed

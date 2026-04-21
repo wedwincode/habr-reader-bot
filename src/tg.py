@@ -7,6 +7,7 @@ from telegram.ext import ContextTypes, Application, CommandHandler, CallbackQuer
 from src.config import logger
 from src.app import AppState
 from src.habr import Article
+from src.utils import extract_habr_article_id
 
 
 class TgApp:
@@ -43,8 +44,12 @@ def build_article_message(article: Article) -> str:
 
 
 def build_article_inline_keyboard(article: Article) -> InlineKeyboardMarkup:
+    article_id = extract_habr_article_id(article.url)
+    if not article_id:
+        raise ValueError(f"Cannot extract Habr article id from url: {article.url}")
+
     return InlineKeyboardMarkup(
-        [[InlineKeyboardButton("Я прочитал", callback_data=f"read|{article.url}")]]
+        [[InlineKeyboardButton("Я прочитал", callback_data=f"read|{article_id}")]]
     )
 
 def build_main_keyboard() -> ReplyKeyboardMarkup:
@@ -98,10 +103,10 @@ async def cmd_sync(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 async def cmd_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
     state: AppState = context.application.bot_data["state"]
     if not context.args:
-        await update.effective_message.reply_text("Передай URL: /done https://habr.com/ru/articles/123/")
+        await update.effective_message.reply_text("Передай habr_id: /done 123")
         return
-    url = context.args[0]
-    changed = await asyncio.to_thread(state.mark_article_as_read, url)
+    habr_id = context.args[0]
+    changed = await asyncio.to_thread(state.mark_article_as_read, habr_id)
     if changed:
         await update.effective_message.reply_text("Отметил как прочитанное")
     else:
@@ -117,8 +122,8 @@ async def on_read_clicked(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
     status_message = await update.effective_message.reply_text("Отмечаю статью как прочитанную...")
 
-    _, url = (query.data or "|").split("|", 1)
-    changed = await asyncio.to_thread(state.mark_article_as_read, url)
+    _, habr_id = (query.data or "|").split("|", 1)
+    changed = await asyncio.to_thread(state.mark_article_as_read, habr_id)
     if not changed:
         await status_message.edit_text("Не удалось отметить статью: запись не найдена в markdown")
         return
