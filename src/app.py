@@ -17,9 +17,17 @@ class AppState:
 
     async def sync_habr_safe(self) -> int:
         async with self._sync_lock:
-            return await asyncio.to_thread(self.sync_habr)
+            return await asyncio.to_thread(self._sync_habr)
 
-    def sync_habr(self) -> int:
+    async def get_next_article_safe(self) -> Article | None:
+        async with self._sync_lock:
+            return await asyncio.to_thread(self._get_next_article)
+
+    async def mark_article_as_read_safe(self, habr_id: str) -> bool:
+        async with self._sync_lock:
+            return await asyncio.to_thread(self._mark_article_as_read, habr_id)
+
+    def _sync_habr(self) -> int:
         articles = self.source.fetch_articles()
         existing = self.store.existing_urls()
         new_articles = [a for a in articles if normalize_url(a.url) not in existing]
@@ -29,11 +37,11 @@ class AppState:
             self.git_sync.sync(reason=f"sync {added}")
         return added
 
-    def get_next_article(self) -> Article | None:
+    def _get_next_article(self) -> Article | None:
         self.git_sync.pull()
         return self.store.first_unread()
 
-    def mark_article_as_read(self, habr_id: str) -> bool:
+    def _mark_article_as_read(self, habr_id: str) -> bool:
         self.git_sync.pull()
         changed = self.store.mark_read_by_habr_id(habr_id)
         if changed:

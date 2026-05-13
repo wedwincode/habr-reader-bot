@@ -1,4 +1,3 @@
-import asyncio
 from datetime import datetime
 
 from telegram import InlineKeyboardMarkup, InlineKeyboardButton, Update, ReplyKeyboardMarkup, KeyboardButton
@@ -75,7 +74,7 @@ async def cmd_next(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
 
     status_message = await update.effective_message.reply_text("Получаю следующую статью...")
 
-    article = state.get_next_article()
+    article = await state.get_next_article_safe()
     if not article:
         await status_message.edit_text("Непрочитанных статей не осталось")
         return
@@ -106,7 +105,7 @@ async def cmd_done(update: Update, context: ContextTypes.DEFAULT_TYPE) -> None:
         await update.effective_message.reply_text("Передай habr_id: /done 123")
         return
     habr_id = context.args[0]
-    changed = await asyncio.to_thread(state.mark_article_as_read, habr_id)
+    changed = await state.mark_article_as_read_safe(habr_id)
     if changed:
         await update.effective_message.reply_text("Отметил как прочитанное")
     else:
@@ -123,11 +122,11 @@ async def on_read_clicked(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
     status_message = await update.effective_message.reply_text("Отмечаю статью как прочитанную...")
 
     _, habr_id = (query.data or "|").split("|", 1)
-    changed = await asyncio.to_thread(state.mark_article_as_read, habr_id)
+    changed = await state.mark_article_as_read_safe(habr_id)
     if not changed:
         await status_message.edit_text("Не удалось отметить статью: запись не найдена в markdown")
         return
-    next_article = state.get_next_article()
+    next_article = await state.get_next_article_safe()
     if next_article:
         await status_message.edit_text("Готово. Статья отмечена как прочитанная.")
         await context.bot.send_message(
@@ -140,7 +139,7 @@ async def on_read_clicked(update: Update, context: ContextTypes.DEFAULT_TYPE) ->
 
 async def reminder_job(context: ContextTypes.DEFAULT_TYPE) -> None:
     state: AppState = context.application.bot_data["state"]
-    article = await asyncio.to_thread(state.get_next_article)  # todo lock
+    article = await state.get_next_article_safe()
     if not article:
         return
     await context.bot.send_message(
