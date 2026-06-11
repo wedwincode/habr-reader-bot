@@ -28,13 +28,17 @@ class AppState:
             return await asyncio.to_thread(self._mark_article_as_read, habr_id)
 
     def _sync_habr(self) -> int:
+        if not self.git_sync.pull():
+            return 0
+
         articles = self.source.fetch_articles()
         existing = self.store.existing_urls()
         new_articles = [a for a in articles if normalize_url(a.url) not in existing]
-        self.git_sync.pull()
+
         added = self.store.add_new_articles(new_articles)
         if added:
             self.git_sync.sync(reason=f"sync {added}")
+
         return added
 
     def _get_next_article(self) -> Article | None:

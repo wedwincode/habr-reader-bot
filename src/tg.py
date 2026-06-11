@@ -179,5 +179,10 @@ async def schedule(app: Application) -> None:
         interval=state.cfg.sync_interval_minutes * 60,
         first=30,
         name="habr-sync",
+        job_kwargs={
+            "max_instances": 1,
+            "coalesce": True,
+            "misfire_grace_time": 300,
+        },
     )
     logger.info("jobs scheduled")

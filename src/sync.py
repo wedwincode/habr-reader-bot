@@ -1,4 +1,6 @@
-from git import Repo
+import time
+
+from git import Repo, GitCommandError
 
 from src.config import Config, logger
 
@@ -7,6 +9,9 @@ class GitSync:
     def __init__(self, cfg: Config):
         self.cfg = cfg
         repo_path = self.cfg.git_repo_path
+
+        if repo_path is None:
+            return
 
         auth_url = cfg.git_repo_url
         if cfg.git_token and cfg.git_repo_url:
@@ -56,16 +61,38 @@ class GitSync:
                 auth_url
             )
 
-    def pull(self) -> None:
+    def pull(self) -> bool:
         if not self.cfg.git_auto_commit or not self.cfg.git_repo_path:
-            return
+            return True
+
         origin = self.repo.remote(self.cfg.git_remote)
 
-        try:
-            origin.pull(self.cfg.git_branch, rebase=True)
-        except Exception as e:
-            logger.exception(f"Git pull failed {e}")
-            return
+        for attempt in range(1, 4):
+            try:
+                origin.pull(self.cfg.git_branch, rebase=True)
+                return True
+            except GitCommandError as e:
+                text = str(e)
+                is_temporary_resource_error = (
+                        "cannot fork" in text
+                        or "Resource temporarily unavailable" in text
+                )
+
+                if not is_temporary_resource_error or attempt == 3:
+                    logger.exception("Git pull failed")
+                    return False
+
+                delay = 10 * attempt
+                logger.warning(
+                    "Git pull failed due to temporary resource issue, retrying in %s seconds",
+                    delay,
+                )
+                time.sleep(delay)
+            except Exception:
+                logger.exception("Git pull failed")
+                return False
+
+        return False
 
     def sync(self, reason: str) -> None:
         if not self.cfg.git_auto_commit or not self.cfg.git_repo_path:
@@ -74,7 +101,9 @@ class GitSync:
         self.repo.git.add(self.cfg.markdown_file.as_posix())
         if not self.repo.is_dirty(untracked_files=True):
             return
+
         self.repo.index.commit(f"bot: update Habr bookmarks ({reason})")
+
         try:
             self.repo.remote(self.cfg.git_remote).push(self.cfg.git_branch)
         except Exception as e:
