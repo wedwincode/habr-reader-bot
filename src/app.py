@@ -1,6 +1,6 @@
 import asyncio
 
-from src.config import Config
+from src.config import Config, logger
 from src.habr import HabrSource
 from src.sync import GitSync
 from src.store import MarkdownStore, Article
@@ -42,11 +42,16 @@ class AppState:
         return added
 
     def _get_next_article(self) -> Article | None:
-        self.git_sync.pull()
+        pulled = self.git_sync.pull()
+        if not pulled:
+            logger.warning("Using local markdown because git pull failed")
         return self.store.first_unread()
 
     def _mark_article_as_read(self, habr_id: str) -> bool:
-        self.git_sync.pull()
+        if not self.git_sync.pull():
+            logger.warning("Cannot mark article as read because git pull failed")
+            return False
+
         changed = self.store.mark_read_by_habr_id(habr_id)
         if changed:
             self.git_sync.sync(reason="mark-read")

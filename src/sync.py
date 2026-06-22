@@ -67,22 +67,16 @@ class GitSync:
 
         origin = self.repo.remote(self.cfg.git_remote)
 
-        for attempt in range(1, 4):
+        for attempt in range(1, 6):
             try:
                 origin.pull(self.cfg.git_branch, rebase=True)
                 return True
             except GitCommandError as e:
-                text = str(e)
-                is_temporary_resource_error = (
-                        "cannot fork" in text
-                        or "Resource temporarily unavailable" in text
-                )
-
-                if not is_temporary_resource_error or attempt == 3:
+                if not self._is_temporary_git_error(str(e)) or attempt == 5:
                     logger.exception("Git pull failed")
                     return False
 
-                delay = 10 * attempt
+                delay = min(60, 10 * attempt)
                 logger.warning(
                     "Git pull failed due to temporary resource issue, retrying in %s seconds",
                     delay,
@@ -108,3 +102,14 @@ class GitSync:
             self.repo.remote(self.cfg.git_remote).push(self.cfg.git_branch)
         except Exception as e:
             logger.exception(f"Git push failed {e}")
+
+    def _is_temporary_git_error(self, text: str) -> bool:
+        temporary_markers = (
+            "cannot fork",
+            "resource temporarily unavailable",
+            "getaddrinfo() thread failed to start",
+            "unable to create thread",
+            "failed to start thread",
+        )
+        lowered = text.lower()
+        return any(marker in lowered for marker in temporary_markers)
